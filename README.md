@@ -1,6 +1,5 @@
 # FC_ESP32
 
-## Features
 - **ESP32-PICO-D4** (default) / **ESP32** (modify makefile)
 - **MODE** : Gyro
 - **INPUT** : PWM
