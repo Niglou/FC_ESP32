@@ -35,8 +35,8 @@ all : firmware.bin
 	@echo
 
 upload : all
-	@#esptool.py -c esp32 write_flash 0x1000 firmware.bin
-	@esptool.py -c esp32 write_flash -sc 6,17,8,11,16 0x1000 firmware.bin
+	@#esptool.py -c esp32 write_flash 0x1000 firmware.bin #esp32
+	@esptool.py -c esp32 write_flash -sc 6,17,8,11,16 0x1000 firmware.bin #esp32-pico-d4
 	@echo
 	@$(SIZE) -B -d firmware.elf
 	@echo
@@ -48,8 +48,8 @@ monitor :
 	@screen /dev/ttyUSB0 115200
 
 firmware.bin :	firmware.elf
-	@#esptool.py -c esp32 elf2image -ff 80m -fm dio -fs 4MB $<
-	@esptool.py -c esp32 elf2image -ff 80m -fm dio -fs 4MB -sc 6,17,8,11,16 $<
+	@#esptool.py -c esp32 elf2image -ff 80m -fm dio -fs 4MB $< #esp32
+	@esptool.py -c esp32 elf2image -ff 80m -fm dio -fs 4MB -sc 6,17,8,11,16 $< #esp32-pico-d4
 
 firmware.elf :	$(OBJ)
 	@$(LD) -v -Llib/ESP32 -L$(HOME)/esp/xtensa-esp32-elf/lib/gcc/xtensa-esp32-elf/8.2.0 $(LDFLAGS) $^ -o $@ -lgcc -lm
