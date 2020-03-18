@@ -1,7 +1,7 @@
 #ifndef H_ESC
 #define H_ESC
 
-#include <ESP32/include/rmt.h>
+#include "rmt.h"
 
 typedef enum { PWM, ONESHOT125, ONESHOT42, MULTISHOT, DSHOT150, DSHOT300, DSHOT600, DSHOT1200 } esc_mode_t;
 

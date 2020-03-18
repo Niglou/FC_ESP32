@@ -1,7 +1,7 @@
 #ifndef H_MPU9250
 #define H_MPU9250
 
-#include <ESP32/include/spi.h>
+#include "spi.h"
 
 #define REG(_r) *(volatile unsigned int*)_r
 

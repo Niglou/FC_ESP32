@@ -1,16 +1,16 @@
-#include <ESP32/include/init.h>
-#include <ESP32/include/rom/ets_sys.h>
+#include "init.h"
+#include "rom/ets_sys.h"
 
-#include <ESP32/registers/dport_reg.h>
+#include <registers/dport_reg.h>
 
 /* Internal periph */
-#include <ESP32/include/intr.h>
-#include <ESP32/include/timer.h>
-#include <ESP32/include/spi.h>
-#include <ESP32/include/spi_flash.h>
-#include <ESP32/include/rmt.h>
-#include <ESP32/include/gpio.h>
-#include <ESP32/include/i2c.h>
+#include "intr.h"
+#include "timer.h"
+#include "spi.h"
+#include "spi_flash.h"
+#include "rmt.h"
+#include "gpio.h"
+#include "i2c.h"
 
 /* External periph */
 #include "drivers/led/ws2812b.h"
@@ -27,7 +27,7 @@
 
 #include "config.h"
 
-#include <ESP32/registers/struct/gpio_struct.h>
+#include <registers/struct/gpio_struct.h>
 
 #include "adc/battery.h"
 
@@ -51,16 +51,12 @@ const float _gyro_sens  = 1 / GYRO_SENS_2000DPS;
 const float _acc_sens   = 1 / ACC_SENS_8G;
 const float _battery_conv = 1.0f / 4096.0f * 31.0f;
 
-Kalman kalman_x, kalman_y;
 PID pid_pitch, pid_roll, pid_yaw;
 
 int offset_gyro[3] = {0};
 float prev_gyro[3] = {0};
 
 short output_motor_1, output_motor_2, output_motor_3, output_motor_4;
-/*
-float angle_x, angle_y, angle_z;
-*/
 
 void main_cpu0() {
 
@@ -101,6 +97,8 @@ void main_cpu0() {
 
   WS2812B led(&RMT_4);
 
+  Kalman kalman_x, kalman_y;
+
   Timer.divider(80);
   Timer.enable();
 
@@ -126,17 +124,10 @@ void main_cpu0() {
   IOMUX.GPIO2.func_drv = 1;
   GPIO.func_out_sel_cfg[2].reg = 91;
 
-  /*
-  if(imu.check() != WHOAMI) {
-  ets_printf("[ERROR] mpu not found");
-  while(1);
-  }
-  */
-
   if(imu.check())
-  ets_printf("MPU9250 : detected ! \n");
+    ets_printf("MPU9250 : detected ! \n");
   else
-  ets_printf("MPU9250 : not found ! \n");
+    ets_printf("MPU9250 : not found ! \n");
 
   imu.init();
   imu.clk_20Mhz();
@@ -174,7 +165,6 @@ void main_cpu0() {
     // 2500 (400Hz)
     while( Timer.counter_l() < 500 );
     Timer.counter_l(0);
-
 
     float adc_reading = 0.0f;
     for(int i=0; i<5; i++) adc_reading += get_battery_voltage();
@@ -221,6 +211,8 @@ void main_cpu0() {
     sensors.gyroY *= -1;
     sensors.gyroZ *= -1;
 
+    sensors.accX *= -1;
+
     float acc_x = sensors.accX * _acc_sens;
     float acc_y = sensors.accY * _acc_sens;
     float acc_z = sensors.accZ * _acc_sens;
@@ -238,7 +230,9 @@ void main_cpu0() {
     prev_gyro[2] = gyro_z;
 
     //float temp = (sensors.temp / 321.0 + 21) * 10;
-
+/*
+    ets_printf("gyroX:%d gyroY:%d gyroZ:%d \n", (int)gyro_x, (int)gyro_y, (int)gyro_z);
+*/
     int throttle_ch = channel_[0];
     int pitch_ch    = channel_[2];
     int roll_ch     = channel_[1];
@@ -271,12 +265,14 @@ void main_cpu0() {
 /*
     ets_printf("ch1:%d ch2:%d ch3:%d ch4:%d ch5:%d \n", (int)throttle_ch, (int)pitch_ch, (int)roll_ch, (int)yaw_ch, (int)aux_1);
 */
-/*
+
     float rate_est_x, rate_est_y;
     float angle_est_x, angle_est_y;
 
     kalman_x.update(&rate_est_x, &angle_est_x, gyro_x, acc_y);
     kalman_y.update(&rate_est_y, &angle_est_y, gyro_y, acc_x);
+/*
+    ets_printf("KangleX:%d KangleY:%d \n", (int)angle_est_x, (int)angle_est_y);
 */
     float Pitch = pid_pitch.calcul(pitch_ch, gyro_y);
     float Roll  = pid_roll.calcul(roll_ch, gyro_x);
@@ -284,8 +280,10 @@ void main_cpu0() {
 /*
     ets_printf("pitch:%d roll:%d, yaw:%d \n", (int)Pitch , (int)Roll, (int)Yaw);
 */
+
     throttle_ch -= 1000;
-    throttle_ch *= 2;
+    // throttle_ch *= 2;
+
     if(throttle_ch < 0) throttle_ch = 0;
     if(throttle_ch > 1500) throttle_ch = 1500;
 
@@ -315,10 +313,11 @@ void main_cpu0() {
 /*
       ets_printf("out1:%d \n", output_motor_1);
 */
-      motor_1.set(output_motor_1 + 48);
-      motor_2.set(output_motor_2 + 48);
-      motor_3.set(output_motor_3 + 48);
-      motor_4.set(output_motor_4 + 48);
+      // dshot (+48)
+      motor_1.set(throttle_ch + 48);
+      motor_2.set(throttle_ch + 48);
+      motor_3.set(throttle_ch + 48);
+      motor_4.set(throttle_ch + 48);
     }
     else {
 
@@ -326,19 +325,21 @@ void main_cpu0() {
       pid_roll.reset_i_sum();
       pid_yaw.reset_i_sum();
 
-      motor_1.set(0);
-      motor_2.set(0);
-      motor_3.set(0);
-      motor_4.set(0);
+      motor_1.set(throttle_ch + 1000);
+      motor_2.set(throttle_ch + 1000);
+      motor_3.set(throttle_ch + 1000);
+      motor_4.set(throttle_ch + 1000);
     }
+
+    ets_printf("%d \n", throttle_ch);
 
     motor_1.write();
     motor_2.write();
     motor_3.write();
     motor_4.write();
-/*
-    ets_printf("t:%d us \n", Timer.counter_l());
-*/
+
+    // ets_printf("t:%d us \n", Timer.counter_l());
+
   }
 
 }

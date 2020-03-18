@@ -1,7 +1,7 @@
 #ifndef H_MAX7456
 #define H_MAX7456
 
-#include <ESP32/include/spi.h>
+#include "spi.h"
 
 // Write Register
 #define W_VM0   0x00

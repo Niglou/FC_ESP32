@@ -1,8 +1,8 @@
 #include "battery.h"
 
-#include <ESP32/registers/struct/rtc_io_struct.h>
-#include <ESP32/registers/struct/sens_struct.h>
-#include <ESP32/registers/struct/apb_ctrl_struct.h>
+#include <registers/struct/rtc_io_struct.h>
+#include <registers/struct/sens_struct.h>
+#include <registers/struct/apb_ctrl_struct.h>
 
 void adc_battery_init() {
 

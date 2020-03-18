@@ -1,7 +1,7 @@
 
 
-#include <ESP32/registers/struct/gpio_struct.h>
-#include <ESP32/registers/gpio_sig_map.h>
+#include <registers/struct/gpio_struct.h>
+#include <registers/gpio_sig_map.h>
 
 
 #include "config.h"

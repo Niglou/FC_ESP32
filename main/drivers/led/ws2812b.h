@@ -1,7 +1,7 @@
 #ifndef H_WS2812B
 #define H_WS2812B
 
-#include <ESP32/include/rmt.h>
+#include "rmt.h"
 
 class WS2812B {
   public:

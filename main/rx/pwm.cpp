@@ -1,9 +1,9 @@
 
-#include <ESP32/registers/struct/gpio_struct.h>
+#include <registers/struct/gpio_struct.h>
 
 #include "config.h"
 
-#include <ESP32/include/timer.h>
+#include "timer.h"
 #include "pwm.h"
 
 extern "C" {

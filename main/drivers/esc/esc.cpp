@@ -116,4 +116,3 @@ unsigned int ESC::dshotChecksum(unsigned int packet) {
   csum &= 0xf;
   return csum;
 }
-

@@ -1,7 +1,7 @@
 #ifndef H_GPIO
 #define H_GPIO
 
-#include <ESP32/registers/struct/iomux_struct.h>
+#include <registers/struct/iomux_struct.h>
 
 /*
 #define IOMUX_CONF2(a) IOMUX.GPIO##a
