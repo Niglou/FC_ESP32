@@ -17,11 +17,20 @@
 
 - Change esp32-nonos path in *Makefile*
 
+- Use "config.h" to set pins for RX and ESC.
+
+## **Upload**
+
+- `make upload` ( For ESP32-PICO-D4 )
+
+Or in command line :
+
 - For ESP32-PICO-D4 flash with this :  
   `esptool.py -c esp32 write_flash -sc 6,17,8,11,16 0x1000 FC_ESP32.bin`  
-  ( If you use ESP32 no need "-sc" option but the pins of the internal flash are not the same, so you may need to change pins )
 
-- Use "config.h" to set pins for RX and ESC.
+- For ESP32 flash with this :  
+  `esptool.py -c esp32 write_flash 0x1000 FC_ESP32.bin`  
+  ( **Warning !** The pins of the internal flash are not the same, so you may need to change pins for some functions )
 
 ## **Pins**
 
