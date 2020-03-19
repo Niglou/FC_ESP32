@@ -282,7 +282,7 @@ void main_cpu0() {
 */
 
     throttle_ch -= 1000;
-    // throttle_ch *= 2;
+    if(ESC_MODE >= DSHOT150) throttle_ch *= 2;
 
     if(throttle_ch < 0) throttle_ch = 0;
     if(throttle_ch > 1500) throttle_ch = 1500;
@@ -314,10 +314,10 @@ void main_cpu0() {
       ets_printf("out1:%d \n", output_motor_1);
 */
       // dshot (+48)
-      motor_1.set(throttle_ch + 48);
-      motor_2.set(throttle_ch + 48);
-      motor_3.set(throttle_ch + 48);
-      motor_4.set(throttle_ch + 48);
+      motor_1.set(output_motor_1 + 48);
+      motor_2.set(output_motor_2 + 48);
+      motor_3.set(output_motor_3 + 48);
+      motor_4.set(output_motor_4 + 48);
     }
     else {
 
@@ -325,10 +325,10 @@ void main_cpu0() {
       pid_roll.reset_i_sum();
       pid_yaw.reset_i_sum();
 
-      motor_1.set(throttle_ch + 1000);
-      motor_2.set(throttle_ch + 1000);
-      motor_3.set(throttle_ch + 1000);
-      motor_4.set(throttle_ch + 1000);
+      motor_1.set(0);
+      motor_2.set(0);
+      motor_3.set(0);
+      motor_4.set(0);
     }
 
     ets_printf("%d \n", throttle_ch);
