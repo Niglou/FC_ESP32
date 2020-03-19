@@ -331,8 +331,6 @@ void main_cpu0() {
       motor_4.set(0);
     }
 
-    ets_printf("%d \n", throttle_ch);
-
     motor_1.write();
     motor_2.write();
     motor_3.write();
