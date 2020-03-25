@@ -4,6 +4,8 @@
 class Kalman {
 public:
   Kalman();
+  void set_dt(float dt);
+  float get_dt();
   void update(float *rate_est, float *angle_est, float rate_gyro, float accel_acc);
 
 private:
@@ -11,7 +13,7 @@ private:
   float R_acc = 0.5f;
 
   float Q_rate = 0.1f;
-  float Q_angle = 0.001f;
+  float Q_angle = 0.0005f;
   float Q_biais = 0.003f;
 
   float X[3] = {0};

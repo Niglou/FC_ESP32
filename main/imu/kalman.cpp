@@ -4,9 +4,13 @@
 #define DEG_TO_RAD 0.017453292519943295769236907684886f
 #define RAD_TO_DEG 57.295779513082320876798154814105f
 
-Kalman::Kalman() {
+Kalman::Kalman() {}
 
+void Kalman::set_dt(float dt) {
+  this->dt = dt;
 }
+
+float Kalman::get_dt() { return dt; }
 
 void Kalman::update(float *rate_est, float *angle_est, float rate_gyro, float accel_acc) {
   unsigned int i, j;
