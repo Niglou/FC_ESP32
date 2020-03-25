@@ -21,7 +21,7 @@ LD_FILES:= $(wildcard $(LD_DIR:=/*.ld))
 ESP32_DIR_SRC:= $(shell find $(ESP32-NONOS) -type d -not -path './.*')
 
 # Add include of ESP32-NONOS
-CFLAG:= $(addprefix -I, $(ESP32_DIR_SRC))
+CFLAG:= $(addprefix -I, $(ESP32_DIR_SRC) './')
 LDFLAGS:= $(addprefix -T, $(LD_FILES)) \
 	-L$(XTENSA)/xtensa-esp32-elf/lib \
 	-L$(XTENSA)/lib/gcc/xtensa-esp32-elf/8.2.0
