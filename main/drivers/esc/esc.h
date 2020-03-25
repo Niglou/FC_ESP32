@@ -7,7 +7,9 @@ typedef enum { PWM, ONESHOT125, ONESHOT42, MULTISHOT, DSHOT150, DSHOT300, DSHOT6
 
 class ESC {
   public:
+    ESC();
     ESC(RMTPeriph *rmt);
+    void attach(RMTPeriph *rmt);
     void mode(esc_mode_t mode);
     void set(unsigned int value, bool telemetry = 0);
     void write();

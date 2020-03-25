@@ -1,19 +1,24 @@
-
 #include "mpu9250.h"
+
+MPU9250::MPU9250() {}
 
 MPU9250::MPU9250(SPIPeriph *spi) {
   _spi = spi;
 }
 
-void MPU9250::init_spi() const {
+void MPU9250::attach(SPIPeriph *spi) {
+  _spi = spi;
+}
+
+void MPU9250::spi_init() const {
   _spi->mode(MASTER);
   _spi->bit_order(MSB_FIRST, MSB_FIRST);
   _spi->byte_order(SPI_LITTE_ENDIAN, SPI_BIG_ENDIAN);
   _spi->full_duplex(NORMAL);
   _spi->phase(SPI_DIS, SPI_EN, SPI_DIS, SPI_EN, SPI_DIS);
   _spi->cmd_len(0);
-  _spi->addr_len(7);
-  _spi->mosi_len(7);
+  _spi->addr_len(7); /* 7 + 1 = 8 bits */
+  _spi->mosi_len(7); /* 7 + 1 = 8 bits */
   _spi->miso_len(0);
   _spi->clk_sys(SPI_DIS);
   _spi->pre_div(19);
@@ -77,7 +82,7 @@ int MPU9250::check() const {
   return ( RRegister(WHOAMI_ADDR) == WHOAMI );
 }
 
-void MPU9250::init() const {
+void MPU9250::mpu_init() const {
 
   WRegister( GYRO_CONFIG , GYRO_2000DPS | GYRO_32KHZ );
   WRegister( ACCEL_CONFIG , ACCEL_8G );

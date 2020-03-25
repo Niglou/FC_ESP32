@@ -1,7 +1,13 @@
 #include <cstdio>
 #include "max7456.h"
 
+MAX7456::MAX7456() {}
+
 MAX7456::MAX7456(SPIPeriph *spi) {
+  _spi = spi;
+}
+
+void MAX7456::attach(SPIPeriph *spi) {
   _spi = spi;
 }
 

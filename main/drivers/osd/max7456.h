@@ -73,7 +73,9 @@
 
 class MAX7456 {
 public:
+  MAX7456();
   MAX7456(SPIPeriph *spi);
+  void attach(SPIPeriph *spi);
   void spi_init() const;
   void init() const;
   int check() const;

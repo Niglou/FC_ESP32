@@ -71,9 +71,11 @@ struct esp32_mpu_gyro {
 
 class MPU9250 {
   public:
+    MPU9250();
     MPU9250(SPIPeriph *spi);
-    void init_spi() const;
-    void init() const;
+    void attach(SPIPeriph *spi);
+    void spi_init() const;
+    void mpu_init() const;
     int check() const;
     unsigned int* buffer() const;
     void get_all() const;

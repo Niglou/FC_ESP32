@@ -1,6 +1,19 @@
 #include "esc.h"
 
+ESC::ESC() {}
+
 ESC::ESC(RMTPeriph *rmt) {
+  _rmt = rmt;
+  _rmt->mode(TRANSMITTER);
+  _rmt->carrier(RMT_DIS);
+  _rmt->idle_en(RMT_EN);
+  _rmt->idle_lvl(RMT_DIS);
+  _rmt->conti_mode(RMT_DIS);
+  _rmt->divider(1);
+  pSet = 0;
+}
+
+void ESC::attach(RMTPeriph *rmt) {
   _rmt = rmt;
   _rmt->mode(TRANSMITTER);
   _rmt->carrier(RMT_DIS);
