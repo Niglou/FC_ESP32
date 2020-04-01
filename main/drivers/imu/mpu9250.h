@@ -10,12 +10,18 @@
 
 #define USER_CTRL           0x6A
 
+#define CONFIG              0x1A
+#define GYRO_BW_3600        0x07
+#define GYRO_BW_250         0x00
+
 #define GYRO_CONFIG         0x1B
 #define GYRO_250DPS         0x00
 #define GYRO_500DPS         0x08
 #define GYRO_1000DPS        0x10
 #define GYRO_2000DPS        0x18
-#define GYRO_32KHZ          0x03
+#define GYRO_8K_1KHZ        0x00
+#define GYRO_L_32KHZ        0x02 /* Bandwidth 3600Hz */
+#define GYRO_F_32KHZ        0x03 /* Bandwidth 8800Hz */
 
 #define GYRO_SENS_250DPS    131.0f
 #define GYRO_SENS_500DPS    65.5f
@@ -78,11 +84,12 @@ class MPU9250 {
     void mpu_init() const;
     int check() const;
     unsigned int* buffer() const;
-    void get_all() const;
-    void get_all_async() const;
-    void get_acc() const;
-    void get_gyro() const;
-    void get_temp() const;
+    void config_get_all() const;
+    void config_get_acc() const;
+    void config_get_gyro() const;
+    void config_get_temp() const;
+    void get() const;
+    void get_async() const;
     void clk_20Mhz() const;
     void clk_1Mhz() const;
     unsigned int test() const;
@@ -94,6 +101,17 @@ class MPU9250 {
     SPIPeriph *_spi;
 
 };
+
+inline void MPU9250::get() const {
+  _spi->transfer();
+  while(_spi->transfer_status());
+}
+
+inline void MPU9250::get_async() const {
+  while(_spi->transfer_status());
+  _spi->transfer();
+}
+
 
 
 #endif /* H_MPU9250 */

@@ -15,12 +15,12 @@ void MPU9250::spi_init() const {
   _spi->bit_order(MSB_FIRST, MSB_FIRST);
   _spi->byte_order(SPI_LITTE_ENDIAN, SPI_BIG_ENDIAN);
   _spi->full_duplex(NORMAL);
-  _spi->phase(SPI_DIS, SPI_EN, SPI_DIS, SPI_EN, SPI_DIS);
+  _spi->phase( SPI_ADDR | SPI_MOSI );
   _spi->cmd_len(0);
   _spi->addr_len(7); /* 7 + 1 = 8 bits */
   _spi->mosi_len(7); /* 7 + 1 = 8 bits */
   _spi->miso_len(0);
-  _spi->clk_sys(SPI_DIS);
+  _spi->clk_sys(0);
   _spi->pre_div(19);
   _spi->clkcnt(3);
   _spi->clk_edge_idle(HIGH);
@@ -84,70 +84,54 @@ int MPU9250::check() const {
 
 void MPU9250::mpu_init() const {
 
-  WRegister( GYRO_CONFIG , GYRO_2000DPS | GYRO_32KHZ );
+  WRegister( CONFIG , GYRO_BW_250 );
+  WRegister( GYRO_CONFIG , GYRO_2000DPS | GYRO_8K_1KHZ );
   WRegister( ACCEL_CONFIG , ACCEL_8G );
   WRegister( ACCEL_CONFIG_2 , ACCEL_4KHZ );
 
-  _spi->phase(SPI_DIS, SPI_EN, SPI_DIS, SPI_DIS, SPI_EN);
+  _spi->phase( SPI_ADDR | SPI_MISO );
   _spi->miso_len(111);
   _spi->addr( ( 0x80 | ACCEL_XOUT_H ) << 24 );
 }
 
-void MPU9250::get_all() const {
-  _spi->phase(SPI_DIS, SPI_EN, SPI_DIS, SPI_DIS, SPI_EN);
+void MPU9250::config_get_all() const {
+  _spi->phase( SPI_ADDR | SPI_MISO );
   _spi->miso_len(111);
   _spi->addr( ( 0x80 | ACCEL_XOUT_H ) << 24 );
-  _spi->clear_all_buffer();
-  _spi->transfer();
-  while(_spi->transfer_st());
 }
 
-void MPU9250::get_all_async() const {
-  _spi->phase(SPI_DIS, SPI_EN, SPI_DIS, SPI_DIS, SPI_EN);
-  _spi->miso_len(111);
-  _spi->addr( ( 0x80 | ACCEL_XOUT_H ) << 24 );
-  _spi->transfer();
-}
-
-void MPU9250::get_acc() const {
-  _spi->phase(SPI_DIS, SPI_EN, SPI_DIS, SPI_DIS, SPI_EN);
+void MPU9250::config_get_acc() const {
+  _spi->phase( SPI_ADDR | SPI_MISO );
   _spi->miso_len(47);
   _spi->addr( ( 0x80 | ACCEL_XOUT_H ) << 24 );
-  _spi->transfer();
-  while(_spi->transfer_st());
 }
 
-void MPU9250::get_gyro() const {
-  _spi->phase(SPI_DIS, SPI_EN, SPI_DIS, SPI_DIS, SPI_EN);
+void MPU9250::config_get_gyro() const {
+  _spi->phase( SPI_ADDR | SPI_MISO );
   _spi->miso_len(47);
   _spi->addr( ( 0x80 | GYRO_XOUT_H ) << 24 );
-  _spi->transfer();
-  while(_spi->transfer_st());
 }
 
-void MPU9250::get_temp() const {
-  _spi->phase(SPI_DIS, SPI_EN, SPI_DIS, SPI_DIS, SPI_EN);
+void MPU9250::config_get_temp() const {
+  _spi->phase( SPI_ADDR | SPI_MISO );
   _spi->miso_len(15);
   _spi->addr( ( 0x80 | TEMP_OUT_H ) << 24 );
-  _spi->transfer();
-  while(_spi->transfer_st());
 }
-
 void MPU9250::WRegister(unsigned char address, unsigned char data) const {
+  _spi->phase( SPI_ADDR | SPI_MOSI );
   _spi->addr(( address ) << 24);
-  _spi->buffer(0, data);
-  _spi->phase(SPI_DIS, SPI_EN, SPI_DIS, SPI_EN, SPI_DIS);
   _spi->mosi_len(7);
+  _spi->buffer(0, data);
   _spi->transfer();
-  while(_spi->transfer_st());
+  while(_spi->transfer_status());
 }
 
 unsigned char MPU9250::RRegister(unsigned char address) const {
+  _spi->phase( SPI_ADDR | SPI_MISO );
   _spi->addr(( 0x80 | address ) << (32-8));
-  _spi->phase(SPI_DIS, SPI_EN, SPI_DIS, SPI_DIS, SPI_EN);
   _spi->miso_len(7);
   _spi->transfer();
-  while(_spi->transfer_st());
+  while(_spi->transfer_status());
   return (_spi->buffer(0) >> 24);
 }
 
