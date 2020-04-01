@@ -6,6 +6,22 @@
 
 Kalman::Kalman() {}
 
+void Kalman::init() {
+  R_gyro = 0.001f;
+  R_acc = 10.0f;
+  Q_rate = 0.001f;
+  Q_angle = 0.0001f;
+  Q_biais = 0.000001f;
+  dt = 0.001f;
+
+  for(int i=0; i<3; i++) X[i] = 0;
+
+  for(int i=0; i<3; i++)
+    for(int j=0; j<3; j++)
+      P[i][j] = 0;
+
+}
+
 void Kalman::set_dt(float dt) {
   this->dt = dt;
 }
