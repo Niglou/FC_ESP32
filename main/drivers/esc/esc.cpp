@@ -60,15 +60,6 @@ void ESC::mode(esc_mode_t mode) {
   }
 }
 
-void ESC::set(unsigned int value, bool telemetry) {
-  (this->*pSet)(value, telemetry);
-}
-
-void ESC::write() {
-  _rmt->rst_pos_trans();
-  _rmt->start();
-}
-
 void ESC::set_pwm(unsigned int value, bool) {
   _rmt->data(0, (1<<15) | value );
 }
@@ -85,46 +76,55 @@ void ESC::set_multishot(unsigned int value, bool) {
 void ESC::set_dshot150(unsigned int value, bool telemetry) {
   unsigned int frame = ( value << 1) | telemetry; // requestTelemetry (0)
   unsigned int checksum = dshotChecksum(frame);
+  unsigned int *buf = _rmt->buffer();
   frame = ( frame << 4) | checksum;
   for (int i = 0; i < 16; i++) {
     unsigned int bit = (frame >> (15-i)) & 0x1;
-    if(bit) _rmt->data(i, ( 135 <<16) | (1<<15) | 400 );
-    else _rmt->data(i, ( 335 <<16) | (1<<15) | 200 ); }
+    if(bit) buf[i] = ( 135 <<16) | (1<<15) | 400 ;
+    else buf[i] = ( 335 <<16) | (1<<15) | 200 ;
+  }
 }
 void ESC::set_dshot300(unsigned int value, bool telemetry) {
   unsigned int frame = ( value << 1) | telemetry; // requestTelemetry (0)
   unsigned int checksum = dshotChecksum(frame);
+  unsigned int *buf = _rmt->buffer();
   frame = ( frame << 4) | checksum;
   for (int i = 0; i < 16; i++) {
     unsigned int bit = (frame >> (15-i)) & 0x1;
-    if(bit) _rmt->data(i, ( 66 <<16) | (1<<15) | 200 );
-    else _rmt->data(i, ( 166 <<16) | (1<<15) | 100 ); }
+    if(bit) buf[i] = ( 66 <<16) | (1<<15) | 200 ;
+    else buf[i] = ( 166 <<16) | (1<<15) | 100 ;
+  }
 }
+
 void ESC::set_dshot600(unsigned int value, bool telemetry) {
   unsigned int frame = ( value << 1) | telemetry; // requestTelemetry (0)
   unsigned int checksum = dshotChecksum(frame);
+  unsigned int *buf = _rmt->buffer();
   frame = ( frame << 4) | checksum;
   for (int i = 0; i < 16; i++) {
     unsigned int bit = (frame >> (15-i)) & 0x1;
-    if(bit) _rmt->data(i, ( 34 <<16) | (1<<15) | 98 );
-    else _rmt->data(i, ( 84 <<16) | (1<<15) | 48 ); }
+    if(bit) buf[i] = ( 34 <<16) | (1<<15) | 98 ;
+    else buf[i] = ( 84 <<16) | (1<<15) | 48 ;
+  }
 }
+
 void ESC::set_dshot1200(unsigned int value, bool telemetry) {
   unsigned int frame = ( value << 1) | telemetry; // requestTelemetry (0)
   unsigned int checksum = dshotChecksum(frame);
-  frame = ( frame << 4) | checksum;
+  unsigned int *buf = _rmt->buffer();
+  frame = (frame << 4) | checksum;
   for (int i = 0; i < 16; i++) {
     unsigned int bit = (frame >> (15-i)) & 0x1;
-    if(bit) _rmt->data(i, ( 17 <<16) | (1<<15) | 50 );
-    else _rmt->data(i, ( 42 <<16) | (1<<15) | 25 ); }
+    if(bit) buf[i] = ( 17 <<16) | (1<<15) | 50 ;
+    else buf[i] = ( 42 <<16) | (1<<15) | 25 ;
+  }
 }
 
 unsigned int ESC::dshotChecksum(unsigned int packet) {
   int csum = 0;
-  int csum_data = packet;
   for(int i=0; i<3; i++) {
-    csum ^= csum_data;
-    csum_data >>=4;
+    csum ^= packet;
+    packet >>=4;
   }
   csum &= 0xf;
   return csum;

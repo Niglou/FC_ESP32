@@ -29,4 +29,14 @@ class ESC {
 
 };
 
+inline void ESC::set(unsigned int value, bool telemetry) {
+  (this->*pSet)(value, telemetry);
+}
+
+inline void ESC::write() {
+  _rmt->rst_pos_trans();
+  _rmt->start();
+}
+
+
 #endif /* H_ESC */
