@@ -3,10 +3,9 @@
 #include <registers/struct/gpio_struct.h>
 #include <registers/gpio_sig_map.h>
 
-
-#include "config.h"
 #include "gpio.h"
-#include "rx/pwm.h"
+#include "main/rx/pwm.h"
+#include "main/config.h"
 
 
 unsigned int channel_gpio_[] = CHANNEL_GPIO;

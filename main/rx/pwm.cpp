@@ -1,15 +1,13 @@
 
 #include <registers/struct/gpio_struct.h>
 
-#include "config.h"
+#include "main/config.h"
 
 #include "timer.h"
 #include "pwm.h"
 
 extern "C" {
-
   void ISR_LVL5();
-
 }
 
 extern unsigned int channel_gpio_[];
