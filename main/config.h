@@ -1,10 +1,9 @@
 #ifndef H_CONFIG
 #define H_CONFIG
 
-/* INPUT MODE */
-/*
+/* INPUT MODE
+
   Analog  : PWM
-  Digital : SBUS
 */
 #define PWM_INPUT
 
@@ -16,12 +15,12 @@
 #define NUM_CHANNEL       6
 
 
-/* ESC MODE */
-/*
+/* ESC MODE
+
     Analog  : PWM / ONESHOT125 / ONESHOT45 / MULTISHOT
     Digital : DSHOT150 / DSHOT300 / DSHOT600 / DSHOT1200
 */
-#define ESC_MODE        DSHOT300
+#define ESC_MODE        DSHOT600
 
 /* GPIO OUTPUT MOTOR */
 #define MOTOR_1_GPIO    9
