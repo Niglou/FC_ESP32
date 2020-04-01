@@ -7,7 +7,6 @@
 #include "intr.h"
 #include "timer.h"
 #include "spi.h"
-#include "spi_flash.h"
 #include "rmt.h"
 #include "gpio.h"
 #include "i2c.h"
@@ -17,9 +16,7 @@
 #include "drivers/imu/mpu9250.h"
 #include "drivers/esc/esc.h"
 #include "drivers/osd/max7456.h"
-
 #include "rx/pwm.h"
-
 #include "gpio/gpio.h"
 
 #include "imu/kalman.h"
@@ -29,21 +26,22 @@
 
 #include <registers/struct/gpio_struct.h>
 
-#include "adc/battery.h"
-
-
 #include <math.h>
 #define DEG_TO_RAD 0.017453292519943295769236907684886f
 #define RAD_TO_DEG 57.295779513082320876798154814105f
 
 #define reg(r) *(volatile unsigned int*)(r)
 
+// Attribute for APP CPU section
+#define IRAM_APP_CPU __attribute__((section(".app_text")))
+#define DRAM_APP_CPU __attribute__((section(".app_data")))
+
 extern "C" {
-
   void main_cpu0();
-  void main_cpu1();
-
+  void IRAM_APP_CPU main_cpu1();
 }
+
+int DRAM_APP_CPU app_cpu_status = 0;
 
 extern volatile int channel_[NUM_CHANNEL];
 
@@ -51,14 +49,76 @@ const float _gyro_sens  = 1 / GYRO_SENS_2000DPS;
 const float _acc_sens   = 1 / ACC_SENS_8G;
 const float _battery_conv = 1.0f / 4096.0f * 31.0f;
 
+
+// Global objects store like static, not heap or stack for better performances
+
+// Internal periph
+TIMPeriph Timer;
+
+SPIPeriph SPI;
+SPIPeriph HSPI;
+SPIPeriph VSPI;
+
+RMTPeriph RMT_[5];
+
+// External periph
+MPU9250 imu;
+
+ESC motor_[4];
+
+// Variables
 PID pid_pitch, pid_roll, pid_yaw;
+PID pid_acc_p, pid_acc_r;
+
+Kalman kalman_pro;
+Kalman DRAM_APP_CPU kalman_app;
+float angle_est_x, angle_est_y, angle_est_z;
+float rate_est_x, rate_est_y;
 
 int offset_gyro[3] = {0};
-float prev_gyro[3] = {0};
+int offset_acc[3] = {0};
 
-short output_motor_1, output_motor_2, output_motor_3, output_motor_4;
+float prev_gyro[3][2] = {0};
 
+short output_motor_[4];
+
+float acc_x, acc_y, acc_z;
+float gyro_x, gyro_y, gyro_z;
+
+
+// APP CPU Function
+void main_cpu1() {
+
+  // Change stack space (32KB banks) for dual core
+  asm(
+    "movsp sp, %0;"
+    "mov.n a7, sp"
+    ::"a"(0x3FFE8000)
+  );
+
+  while(1) {
+    while(!app_cpu_status);
+
+    if(app_cpu_status == 1) {
+
+      // Calcul kalman
+      kalman_app.update(&rate_est_y, &angle_est_y, gyro_y, acc_x);
+
+    }
+
+    app_cpu_status = 0;
+  }
+}
+
+// PRO CPU Function
 void main_cpu0() {
+
+  // Change stack space (32KB banks) for dual core
+  asm(
+    "movsp sp, %0;"
+    "mov.n a7, sp"
+    ::"a"(0x3FFF0000)
+  );
 
   init_esp32();
   ets_install_uart_printf();
@@ -66,136 +126,163 @@ void main_cpu0() {
 
   /* ********* SETUP *********** */
 
-  TIMPeriph Timer(GROUP0, TIMER0);
+  Timer.attach(GROUP0, TIMER0);
 
-  SPIPeriph SPI(SPI1_PERIPH);
-  SPIPeriph HSPI(SPI2_PERIPH);
-  SPIPeriph VSPI(SPI3_PERIPH);
+   SPI.attach(SPI1_PERIPH);
+  HSPI.attach(SPI2_PERIPH);
+  VSPI.attach(SPI3_PERIPH);
 
-  RMTPeriph RMT_0(CHANNEL_0);
-  RMTPeriph RMT_1(CHANNEL_1);
-  RMTPeriph RMT_2(CHANNEL_2);
-  RMTPeriph RMT_3(CHANNEL_3);
+  /* Attach RMT object to each channel */
+  RMT_[0].attach(CHANNEL_0);
+  RMT_[1].attach(CHANNEL_1);
+  RMT_[2].attach(CHANNEL_2);
+  RMT_[3].attach(CHANNEL_3);
 
-  RMTPeriph RMT_4(CHANNEL_4);
+  /* Channel for LED state */
+  RMT_[4].attach(CHANNEL_4);
 
-  pid_pitch.K ( 2.2f , 0.006f , 3.0f );
-  pid_roll.K  ( 2.2f , 0.006f , 3.0f );
-  pid_yaw.K   ( 4.75f , 0.018f , 0.0f );
+  imu.attach(&HSPI);
 
-  intFlashClass FLASH(&SPI);
+  for(int i=0; i<4; i++)
+    motor_[i].attach(&RMT_[i]);
 
-  MPU9250 imu(&HSPI);
-  MAX7456 osd(&VSPI);
 
+  /* Set PID value */
+  pid_pitch.K ( 2.5f  , 0.006f  , 0.0f );
+  pid_roll.K  ( 2.5f  , 0.006f  , 0.0f );
+  pid_yaw.K   ( 5.0f  , 0.018f  , 0.0f );
+
+  pid_acc_p.K ( 0.4f  , 0.0f  , 0.0f );
+  pid_acc_r.K ( 0.4f  , 0.0f  , 0.0f );
+
+  // Initialize kalman variables
+  kalman_pro.init();
+  kalman_app.init();
+
+  // Set with loop time (sec)
+  kalman_pro.set_dt(0.0005f);
+  kalman_app.set_dt(0.0005f);
+
+  // Initialize input
   init_input_pwm();
 
-  ESC motor_1(&RMT_0);
-  ESC motor_2(&RMT_1);
-  ESC motor_3(&RMT_2);
-  ESC motor_4(&RMT_3);
+  WS2812B led(&RMT_[4]);
 
-  WS2812B led(&RMT_4);
+  MAX7456 osd(&VSPI);
 
-  Kalman kalman_x, kalman_y;
+  // Initialize spi controller
+  imu.spi_init();
 
+  // Config and start Timer
   Timer.divider(80);
   Timer.enable();
 
-  FLASH.spi_init();
-
-  imu.init_spi();
+  // Initialize spi controller
   osd.spi_init();
 
-  motor_1.mode(ESC_MODE);
-  motor_2.mode(ESC_MODE);
-  motor_3.mode(ESC_MODE);
-  motor_4.mode(ESC_MODE);
+  for(int i=0; i<4; i++)
+    motor_[i].mode(ESC_MODE);
 
-  adc_battery_init();
-
-  FLASH.spi_bus_init();
+  // Initialize gpio for sensors, esc, input, etc
   init_gpio();
-
-  //FLASH.write(0x10002, 0x3F);
 
   // Led GPIO
   IOMUX.GPIO2.reg = 0;
   IOMUX.GPIO2.func_drv = 1;
   GPIO.func_out_sel_cfg[2].reg = 91;
 
-  if(imu.check())
-    ets_printf("MPU9250 : detected ! \n");
-  else
+  // Check mpu
+  if(imu.check()) ets_printf("MPU9250 : detected ! \n");
+  else {
     ets_printf("MPU9250 : not found ! \n");
+    while(1);
+  }
 
-  imu.init();
+  // Initialize mpu and use the 20Mhz clock
+  imu.mpu_init();
   imu.clk_20Mhz();
 
+  // Calcul gyro offset
+  imu.config_get_gyro();
   struct esp32_mpu_gyro *gyro = (esp32_mpu_gyro*)imu.buffer();
   for(int i=0; i<500; i++) {
-    imu.get_gyro();
+    imu.get();
     offset_gyro[0] += gyro->gyroX;
     offset_gyro[1] += gyro->gyroY;
     offset_gyro[2] += gyro->gyroZ;
     while( Timer.counter_l() < 500 );
     Timer.counter_l(0);
   }
-  offset_gyro[0] /= 500;
-  offset_gyro[1] /= 500;
-  offset_gyro[2] /= 500;
+  for(int i=0; i<3; i++)
+    offset_gyro[i] /= 500;
 
-  ets_delay_us(2000000);
 
-  osd.init();
+  // Calcul accelerometer offset
+/*
+  imu.config_get_acc();
+  struct esp32_mpu_gyro *acc = (esp32_mpu_gyro*)imu.buffer();
+  for(int i=0; i<500; i++) {
+    Timer.counter_l(0);
+    imu.get();
+    offset_acc[0] += acc->gyroX;
+    offset_acc[1] += acc->gyroY;
+    offset_acc[2] += acc->gyroZ;
+    while( Timer.counter_l() < 500 );
+  }
 
-  led.color(120, 0, 0);
+  for(int i=0; i<3; i++)
+    offset_acc[i] /= 500;
 
-  //int throttle_ch, pitch_ch, roll_ch, yaw_ch, aux_1;
+  ets_printf("X: %d\nY: %d\nZ: %d\n", (int)offset_acc[0], (int)offset_acc[1], (int)offset_acc[2]);
+*/
 
-  /* Interrupt matrix */
+  // Set accelerometer offsets
+  offset_acc[0] = -120;
+  offset_acc[1] = 75;
+  offset_acc[2] = 84;
+
+  // Wait 1sec
+  ets_delay_us(1000000);
+
+  // Turn off MAX7456 (not use yet)
+  osd.turnOff();
+  // osd.init();
+
+  // LED status not use yet
+  //led.color(120, 0, 0);
+
+  // Config imu object to get all sensors values
+  imu.config_get_all();
+
+  // Start APP_CPU
+  *(unsigned int*)(DPORT_APPCPU_CTRL_D_REG) = (unsigned int)&main_cpu1; // Address function
+  *(unsigned int*)(DPORT_APPCPU_CTRL_A_REG) = 1; // Set reset
+  *(unsigned int*)(DPORT_APPCPU_CTRL_B_REG) = 1; // Set clock
+  *(unsigned int*)(DPORT_APPCPU_CTRL_A_REG) = 0; // Clear reset
+
+  // Interrupt matrix
+  // RX input pwm
   reg(DPORT_PRO_GPIO_INTERRUPT_NMI_MAP_REG) = 26; // gpio -> level 5(26)
-  intr_enable( 1<<26 );
-
+  intr_enable( 1<<26 ); // Enable interrupt 26 (LVL5)
 
   /* ************ LOOP ************ */
   int test_time = 0;
-  while(true) {
+  while(1) {
 
-    // 2500 (400Hz)
+    // 500 (2KHz)
+    // Use Low address counter (32bit)
+    // No need High address (64bit)
     while( Timer.counter_l() < 500 );
     Timer.counter_l(0);
 
-    float adc_reading = 0.0f;
-    for(int i=0; i<5; i++) adc_reading += get_battery_voltage();
-    adc_reading *= 0.2f;
-
-    float adc_value = adc_reading * _battery_conv * 1000;
-    int adc_integer = adc_value;
-
-    char array[5];
-    for (int i = 4; i >= 0; i--) {
-      array[i] = adc_integer % 10;
-      if(array[i] == 0) array[i] = 0x0A;
-      adc_integer /= 10;
-    }
-
-    osd.print(array, 13, 12); // 300us
-
-/*
-    ets_printf("%d \n", adc_integer);
-*/
-
-    //led.write();
-
     // Get sensors values from SPI buffer
     struct esp32_mpu_all *sensors_raw;
-    sensors_raw = (struct esp32_mpu_all*)imu.buffer();
+    sensors_raw = (struct esp32_mpu_all*)imu.buffer(); // imu buffer (SPI)
 
     struct esp32_mpu_all sensors;
-    sensors.accX = sensors_raw->accX;
-    sensors.accY = sensors_raw->accY;
-    sensors.accZ = sensors_raw->accZ;
+    sensors.accX = sensors_raw->accX - offset_acc[0];
+    sensors.accY = sensors_raw->accY - offset_acc[1];
+    sensors.accZ = sensors_raw->accZ - offset_acc[2];
 
     sensors.gyroX = sensors_raw->gyroX - offset_gyro[0];
     sensors.gyroY = sensors_raw->gyroY - offset_gyro[1];
@@ -203,8 +290,8 @@ void main_cpu0() {
 
     sensors.temp = sensors_raw->temp;
 
-    // Get sensors values in SPI buffer while calcul
-    imu.get_all_async();
+    // Start SPI transfer while calcul
+    imu.get_async();
 
     // Correct the direction
     sensors.gyroX *= -1;
@@ -213,34 +300,39 @@ void main_cpu0() {
 
     sensors.accX *= -1;
 
-    float acc_x = sensors.accX * _acc_sens;
-    float acc_y = sensors.accY * _acc_sens;
-    float acc_z = sensors.accZ * _acc_sens;
+    // Convert to g
+    acc_x = sensors.accX * _acc_sens;
+    acc_y = sensors.accY * _acc_sens;
+    acc_z = sensors.accZ * _acc_sens;
 
-    float gyro_x = sensors.gyroX * _gyro_sens;
-    float gyro_y = sensors.gyroY * _gyro_sens;
-    float gyro_z = sensors.gyroZ * _gyro_sens;
+    // Convert to °/s
+    gyro_x = sensors.gyroX * _gyro_sens;
+    gyro_y = sensors.gyroY * _gyro_sens;
+    gyro_z = sensors.gyroZ * _gyro_sens;
 
-    gyro_x = (gyro_x + prev_gyro[0]) * 0.5;
-    gyro_y = (gyro_y + prev_gyro[1]) * 0.5;
-    gyro_z = (gyro_z + prev_gyro[2]) * 0.5;
+    // Average of 2 values
+    gyro_x = (gyro_x + prev_gyro[0][0]) * 0.5f;
+    gyro_y = (gyro_y + prev_gyro[1][0]) * 0.5f;
+    gyro_z = (gyro_z + prev_gyro[2][0]) * 0.5f;
 
-    prev_gyro[0] = gyro_x;
-    prev_gyro[1] = gyro_y;
-    prev_gyro[2] = gyro_z;
+    prev_gyro[0][0] = gyro_x;
+    prev_gyro[1][0] = gyro_y;
+    prev_gyro[2][0] = gyro_z;
 
-    //float temp = (sensors.temp / 321.0 + 21) * 10;
-/*
-    ets_printf("gyroX:%d gyroY:%d gyroZ:%d \n", (int)gyro_x, (int)gyro_y, (int)gyro_z);
-*/
+    // float temp = (sensors.temp / 321.0 + 21) * 10;
+
+    // Start kalman calcul on APP_CPU
+    app_cpu_status = 1;
+
+    // Get input from interrupt variables
     int throttle_ch = channel_[0];
     int pitch_ch    = channel_[2];
     int roll_ch     = channel_[1];
     int yaw_ch      = channel_[3];
     int aux_1       = channel_[4];
-/*
-    ets_printf("ch1:%d ch2:%d ch3:%d ch4:%d ch5:%d \n", throttle_ch, pitch_ch, roll_ch, yaw_ch, aux_1);
-*/
+    int aux_2       = channel_[5];
+
+    // Inout Margin
     if(pitch_ch > 1510)     pitch_ch  -= 1510;
     else if(pitch_ch < 1490)pitch_ch  -= 1490;
     else pitch_ch = 0;
@@ -253,7 +345,7 @@ void main_cpu0() {
     else if(yaw_ch < 1490)  yaw_ch    -= 1490;
     else yaw_ch = 0;
 
-
+    // Input max value
     if(pitch_ch < -500) pitch_ch  = -500;
     if(roll_ch  < -500) roll_ch   = -500;
     if(yaw_ch   < -500) yaw_ch    = -500;
@@ -262,81 +354,80 @@ void main_cpu0() {
     if(roll_ch  > 500) roll_ch  = 500;
     if(yaw_ch   > 500) yaw_ch   = 500;
 
-/*
-    ets_printf("ch1:%d ch2:%d ch3:%d ch4:%d ch5:%d \n", (int)throttle_ch, (int)pitch_ch, (int)roll_ch, (int)yaw_ch, (int)aux_1);
-*/
+    // Kalman calcul on PRO_CPU
+    kalman_pro.update(&rate_est_x, &angle_est_x, gyro_x, acc_y);
 
-    float rate_est_x, rate_est_y;
-    float angle_est_x, angle_est_y;
+    // Wait calcul of APP_CPU
+    while(app_cpu_status);
 
-    kalman_x.update(&rate_est_x, &angle_est_x, gyro_x, acc_y);
-    kalman_y.update(&rate_est_y, &angle_est_y, gyro_y, acc_x);
-/*
-    ets_printf("KangleX:%d KangleY:%d \n", (int)angle_est_x, (int)angle_est_y);
-*/
-    float Pitch = pid_pitch.calcul(pitch_ch, gyro_y);
-    float Roll  = pid_roll.calcul(roll_ch, gyro_x);
-    float Yaw   = pid_yaw.calcul(yaw_ch, gyro_z);
-/*
-    ets_printf("pitch:%d roll:%d, yaw:%d \n", (int)Pitch , (int)Roll, (int)Yaw);
-*/
+    // x°*10 -> 50° max (command_max = 500)
+    angle_est_x *= 10.0f;
+    angle_est_y *= 10.0f;
 
+    // Calcul PID
+    float Pitch, Roll, Yaw;
+    // If switch STABLE MODE (AUX 2)
+    if( aux_2 > 1500 ) {
+      pitch_ch = pid_acc_p.calcul(pitch_ch, angle_est_y);
+      roll_ch  = pid_acc_r.calcul(roll_ch, angle_est_x);
+    }
+    Pitch = pid_pitch.calcul(pitch_ch, gyro_y);
+    Roll  = pid_roll.calcul(roll_ch, gyro_x);
+    Yaw = pid_yaw.calcul(yaw_ch, gyro_z);
+
+    // Throttle 0 - 1000
     throttle_ch -= 1000;
+
+    // If Throttle 0 - 1000, convert to 0 - 2000 for dshot
     if(ESC_MODE >= DSHOT150) throttle_ch *= 2;
 
+    // Limit value of throttle
     if(throttle_ch < 0) throttle_ch = 0;
     if(throttle_ch > 1500) throttle_ch = 1500;
 
-/*
-    ets_printf("%d \n", throttle_ch);
-*/
-    output_motor_1 = throttle_ch - Pitch - Roll + Yaw;
-		output_motor_2 = throttle_ch - Pitch + Roll - Yaw;
-		output_motor_3 = throttle_ch + Pitch + Roll + Yaw;
-		output_motor_4 = throttle_ch + Pitch - Roll - Yaw;
-/*
-    ets_printf("1:%d 2:%d 3:%d 4:%d \n", output_motor_1, output_motor_2, output_motor_3, output_motor_4);
-*/
+    // Mix motor
+    output_motor_[0] = throttle_ch - Pitch - Roll + Yaw;
+		output_motor_[1] = throttle_ch - Pitch + Roll - Yaw;
+		output_motor_[2] = throttle_ch + Pitch + Roll + Yaw;
+		output_motor_[3] = throttle_ch + Pitch - Roll - Yaw;
+
+    // If ARM (AUX 1)
     if(aux_1 > 1500) {
 
-      if(output_motor_1 > 1500) output_motor_1 = 1500;
-      else if(output_motor_1 < 25) output_motor_1 = 25;
+      for(int i=0; i<4; i++) {
+        if(output_motor_[i] > 1500) output_motor_[i] = 1500;
+        else if(output_motor_[i] < 25) output_motor_[i] = 25;
+      }
 
-      if(output_motor_2 > 1500) output_motor_2 = 1500;
-      else if(output_motor_2 < 25) output_motor_2 = 25;
+      // Set buffer motor (rmt buffer)
+      for(int i=0; i<4; i++)
+          motor_[i].set(output_motor_[i] + 48); // DSHOT +48
 
-      if(output_motor_3 > 1500) output_motor_3 = 1500;
-      else if(output_motor_3 < 25) output_motor_3 = 25;
-
-      if(output_motor_4 > 1500) output_motor_4 = 1500;
-      else if(output_motor_4 < 25) output_motor_4 = 25;
-/*
-      ets_printf("out1:%d \n", output_motor_1);
-*/
-      // dshot (+48)
-      motor_1.set(output_motor_1 + 48);
-      motor_2.set(output_motor_2 + 48);
-      motor_3.set(output_motor_3 + 48);
-      motor_4.set(output_motor_4 + 48);
     }
+    // If NOT ARM
     else {
 
+      // Reset PID sum
       pid_pitch.reset_i_sum();
       pid_roll.reset_i_sum();
       pid_yaw.reset_i_sum();
 
-      motor_1.set(0);
-      motor_2.set(0);
-      motor_3.set(0);
-      motor_4.set(0);
+      pid_acc_p.reset_i_sum();
+      pid_acc_r.reset_i_sum();
+
+      // Set buffer motor (rmt buffer)
+      for(int i=0; i<4; i++)
+        motor_[i].set(0);
+
     }
 
-    motor_1.write();
-    motor_2.write();
-    motor_3.write();
-    motor_4.write();
+    // Send motor buffer to ESC
+    for(int i=0; i<4; i++)
+      motor_[i].write();
 
-    // ets_printf("t:%d us \n", Timer.counter_l());
+    // Loop time
+    //int looptime = Timer.counter_l();
+    //ets_printf("t:%d us \n", looptime);
 
   }
 
