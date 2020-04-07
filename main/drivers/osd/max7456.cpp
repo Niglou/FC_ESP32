@@ -24,7 +24,7 @@ void MAX7456::spi_init() const {
   _spi->pre_div(1);
   _spi->clkcnt(3);
   _spi->clk_edge_idle(LOW);
-  _spi->addr(0);
+  _spi->addr_h(0);
   _spi->clk_miso_delay(2, 0);
   _spi->clear_all_buffer();
 }
@@ -64,7 +64,7 @@ void MAX7456::print(char x, char y, char *value, char length) {
 
   // Set start ADDR DISPLAY
   _spi->addr_len(31);
-  _spi->addr( (DMAH << 24) | (addrH << 16) | (DMAL << 8) | addrL );
+  _spi->addr_h( (DMAH << 24) | (addrH << 16) | (DMAL << 8) | addrL );
 
   // Number of bits
   _spi->mosi_len( 16*length -1);
@@ -96,7 +96,7 @@ void MAX7456::print(char x, char y, char *value, char length) {
 
 void MAX7456::WRegister(unsigned char addr, unsigned char data) const {
   _spi->phase( SPI_ADDR | SPI_MOSI );
-  _spi->addr(addr << 24);
+  _spi->addr_h(addr << 24);
   _spi->buffer(0, data);
   _spi->mosi_len(7);
   _spi->transfer();
@@ -105,7 +105,7 @@ void MAX7456::WRegister(unsigned char addr, unsigned char data) const {
 
 unsigned char MAX7456::RRegister(unsigned char addr) const {
   _spi->phase( SPI_ADDR | SPI_MISO );
-  _spi->addr( ( 0x80 | addr ) << 24);
+  _spi->addr_h( ( 0x80 | addr ) << 24);
   _spi->miso_len(7);
   _spi->transfer();
   while(_spi->transfer_status());
