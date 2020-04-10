@@ -3,20 +3,21 @@
 
 #include <registers/dport_reg.h>
 
-/* Internal periph */
+// Internal periph ESP32 NONOS
 #include "intr.h"
 #include "timer.h"
 #include "spi.h"
 #include "rmt.h"
 #include "gpio.h"
-#include "i2c.h"
+#include "adc.h"
 
-/* External periph */
+// External periph FC ESP32
 #include "drivers/led/ws2812b.h"
 #include "drivers/imu/mpu9250.h"
 #include "drivers/esc/esc.h"
 #include "drivers/osd/max7456.h"
 #include "rx/pwm.h"
+#include "rx/rx.h"
 #include "gpio/gpio.h"
 
 #include "imu/kalman.h"
@@ -27,10 +28,6 @@
 #include <registers/struct/gpio_struct.h>
 
 #include <math.h>
-#define DEG_TO_RAD 0.017453292519943295769236907684886f
-#define RAD_TO_DEG 57.295779513082320876798154814105f
-
-#define reg(r) *(volatile unsigned int*)(r)
 
 // Attribute for APP CPU section
 #define IRAM_APP_CPU __attribute__((section(".app_text")))
@@ -43,48 +40,49 @@ extern "C" {
 
 int DRAM_APP_CPU app_cpu_status = 0;
 
-extern volatile int channel_[NUM_CHANNEL];
+extern volatile int rx_channel_[NUM_CHANNEL];
 
 const float _gyro_sens  = 1 / GYRO_SENS_2000DPS;
 const float _acc_sens   = 1 / ACC_SENS_8G;
-const float _battery_conv = 1.0f / 4096.0f * 31.0f;
 
+// R1 = 30000 R2 = 1000  Ub = Uadc * (R2/(R1+R2))
+const float battery_pont = 34.1;
 
 // Global objects store like static, not heap or stack for better performances
 
 // Internal periph
 TIMPeriph Timer;
-
 SPIPeriph SPI;
 SPIPeriph HSPI;
 SPIPeriph VSPI;
-
 RMTPeriph RMT_[5];
+ADCPeriph ADC1;
 
 // External periph
 MPU9250 imu;
-
+MAX7456 osd;
 ESC motor_[4];
 
 // Variables
-PID pid_pitch, pid_roll, pid_yaw;
-PID pid_acc_p, pid_acc_r;
+int offset_gyro[3] = {0};
+int offset_acc[3] = {0};
+
+float prev_gyro[3][2] = {0};
+
+float acc_x, acc_y, acc_z;
+float gyro_x, gyro_y, gyro_z;
 
 Kalman kalman_pro;
 Kalman DRAM_APP_CPU kalman_app;
 float angle_est_x, angle_est_y, angle_est_z;
 float rate_est_x, rate_est_y;
 
-int offset_gyro[3] = {0};
-int offset_acc[3] = {0};
-
-float prev_gyro[3][2] = {0};
+PID pid_pitch, pid_roll, pid_yaw;
+PID pid_acc_p, pid_acc_r;
 
 short output_motor_[4];
 
-float acc_x, acc_y, acc_z;
-float gyro_x, gyro_y, gyro_z;
-
+uint32_t battery_voltage = 0;
 
 // APP CPU Function
 void main_cpu1() {
@@ -138,37 +136,25 @@ void main_cpu0() {
   RMT_[2].attach(CHANNEL_2);
   RMT_[3].attach(CHANNEL_3);
 
-  /* Channel for LED state */
-  RMT_[4].attach(CHANNEL_4);
+  ADC1.attach(RTC_ADC_1);
 
   imu.attach(&HSPI);
 
   for(int i=0; i<4; i++)
     motor_[i].attach(&RMT_[i]);
 
+  osd.attach(&VSPI);
 
   /* Set PID value */
-  pid_pitch.K ( 2.5f  , 0.006f  , 0.0f );
-  pid_roll.K  ( 2.5f  , 0.006f  , 0.0f );
-  pid_yaw.K   ( 5.0f  , 0.018f  , 0.0f );
+  pid_pitch.K ( 2.2f  , 0.006f  , 0.0f );
+  pid_roll.K  ( 2.2f  , 0.006f  , 0.0f );
+  pid_yaw.K   ( 4.0f  , 0.016f  , 0.0f );
 
   pid_acc_p.K ( 0.4f  , 0.0f  , 0.0f );
   pid_acc_r.K ( 0.4f  , 0.0f  , 0.0f );
 
-  // Initialize kalman variables
-  kalman_pro.init();
-  kalman_app.init();
-
-  // Set with loop time (sec)
-  kalman_pro.set_dt(0.0005f);
-  kalman_app.set_dt(0.0005f);
-
   // Initialize input
   init_input_pwm();
-
-  WS2812B led(&RMT_[4]);
-
-  MAX7456 osd(&VSPI);
 
   // Initialize spi controller
   imu.spi_init();
@@ -182,6 +168,10 @@ void main_cpu0() {
 
   for(int i=0; i<4; i++)
     motor_[i].mode(ESC_MODE);
+
+  ADC1.set_width(ADC_WIDTH_BIT_12);
+  ADC1.set_channel_atten(ADC_CHANNEL_0, ADC_ATTEN_DB_0);
+  ADC1.start_async(ADC_CHANNEL_0);
 
   // Initialize gpio for sensors, esc, input, etc
   init_gpio();
@@ -244,15 +234,22 @@ void main_cpu0() {
   // Wait 1sec
   ets_delay_us(1000000);
 
-  // Turn off MAX7456 (not use yet)
-  osd.turnOff();
-  // osd.init();
+  // Initialize kalman variables
+  kalman_pro.init();
+  kalman_app.init();
 
-  // LED status not use yet
-  //led.color(120, 0, 0);
+  // Set kalman dt (loop time unit=sec)
+  kalman_pro.set_dt(0.0005f);
+  kalman_app.set_dt(0.0005f);
+
+  // Initialize MAX7456
+  osd.init();
 
   // Config imu object to get all sensors values
   imu.config_get_all();
+
+  float RC = 1 / ( 2 * M_PI * 100.0f);
+  float K_GYRO = 0.0005f / (RC + 0.0005f);
 
   // Start APP_CPU
   *(unsigned int*)(DPORT_APPCPU_CTRL_D_REG) = (unsigned int)&main_cpu1; // Address function
@@ -262,7 +259,7 @@ void main_cpu0() {
 
   // Interrupt matrix
   // RX input pwm
-  reg(DPORT_PRO_GPIO_INTERRUPT_NMI_MAP_REG) = 26; // gpio -> level 5(26)
+  *(unsigned int*)(DPORT_PRO_GPIO_INTERRUPT_NMI_MAP_REG) = 26; // gpio -> level 5(26)
   intr_enable( 1<<26 ); // Enable interrupt 26 (LVL5)
 
   /* ************ LOOP ************ */
@@ -310,6 +307,7 @@ void main_cpu0() {
     gyro_y = sensors.gyroY * _gyro_sens;
     gyro_z = sensors.gyroZ * _gyro_sens;
 
+/*
     // Average of 2 values
     gyro_x = (gyro_x + prev_gyro[0][0]) * 0.5f;
     gyro_y = (gyro_y + prev_gyro[1][0]) * 0.5f;
@@ -318,21 +316,54 @@ void main_cpu0() {
     prev_gyro[0][0] = gyro_x;
     prev_gyro[1][0] = gyro_y;
     prev_gyro[2][0] = gyro_z;
+*/
+
+    prev_gyro[0][0] = prev_gyro[0][0] + K_GYRO * (gyro_x - prev_gyro[0][0]);
+    prev_gyro[1][0] = prev_gyro[1][0] + K_GYRO * (gyro_y - prev_gyro[1][0]);
+    prev_gyro[2][0] = prev_gyro[2][0] + K_GYRO * (gyro_z - prev_gyro[2][0]);
+
+    gyro_x = prev_gyro[0][0];
+    gyro_y = prev_gyro[1][0];
+    gyro_z = prev_gyro[2][0];
+
 
     // float temp = (sensors.temp / 321.0 + 21) * 10;
+
+    //ets_printf("D,%d,%d,%d,\n", (int)gyro_x, (int)gyro_y, (int)gyro_z);
 
     // Start kalman calcul on APP_CPU
     app_cpu_status = 1;
 
-    // Get input from interrupt variables
-    int throttle_ch = channel_[0];
-    int pitch_ch    = channel_[2];
-    int roll_ch     = channel_[1];
-    int yaw_ch      = channel_[3];
-    int aux_1       = channel_[4];
-    int aux_2       = channel_[5];
+    // Get battery voltage
+    battery_voltage = ADC1.get_voltage_async();
+    float real_voltage = battery_voltage * battery_pont - 3200;
 
-    // Inout Margin
+    // Convert voltage to XX.XX array for MAX7456
+    int real_voltage_int = real_voltage;
+    char array_real_voltage[5];
+    for(int i=5; i>=0; i--) {
+      array_real_voltage[i] = real_voltage_int % 10;
+      real_voltage_int /= 10;
+    }
+    array_real_voltage[4] = array_real_voltage[3];
+    array_real_voltage[3] = array_real_voltage[2];
+    array_real_voltage[2] = 65; // 65 = '.'
+
+    // Print to screen
+    osd.print(13, 12, array_real_voltage, 5);
+
+    // Start adc convert
+    ADC1.start_async(ADC_CHANNEL_0);
+
+    // Get input from interrupt variables
+    float throttle_ch = rx_channel_[0];
+    float pitch_ch    = rx_channel_[2];
+    float roll_ch     = rx_channel_[1];
+    float yaw_ch      = rx_channel_[3];
+    float aux_1       = rx_channel_[4];
+    float aux_2       = rx_channel_[5];
+
+    // Input Margin
     if(pitch_ch > 1510)     pitch_ch  -= 1510;
     else if(pitch_ch < 1490)pitch_ch  -= 1490;
     else pitch_ch = 0;
@@ -353,6 +384,12 @@ void main_cpu0() {
     if(pitch_ch > 500) pitch_ch = 500;
     if(roll_ch  > 500) roll_ch  = 500;
     if(yaw_ch   > 500) yaw_ch   = 500;
+
+    pitch_ch  = apply_rc_expo(pitch_ch);
+    roll_ch   = apply_rc_expo(roll_ch);
+    yaw_ch    = apply_rc_expo(yaw_ch);
+
+    //ets_printf("ch : %d, %d, %d\n", (int)pitch_ch, (int)roll_ch, (int)yaw_ch);
 
     // Kalman calcul on PRO_CPU
     kalman_pro.update(&rate_est_x, &angle_est_x, gyro_x, acc_y);
@@ -421,6 +458,9 @@ void main_cpu0() {
 
     }
 
+    //char text[] = {1, 2, 3};
+    //osd.print(13, 6, text, 3);
+
     // Send motor buffer to ESC
     for(int i=0; i<4; i++)
       motor_[i].write();
@@ -428,6 +468,10 @@ void main_cpu0() {
     // Loop time
     //int looptime = Timer.counter_l();
     //ets_printf("t:%d us \n", looptime);
+
+    //float real_voltage = battery_voltage * battery_pont - 3200;
+    //ets_printf("ADC: %d mV\n", battery_voltage);
+    //ets_printf("V: %d mV\n", (int)real_voltage);
 
   }
 
