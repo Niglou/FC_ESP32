@@ -50,7 +50,7 @@ public:
   void init() const;
   int check() const;
   char stat() const;
-  void print(char x, char y, char *value, char length);
+  void print(unsigned char x, unsigned char y, char *value, unsigned char length) const;
 
 private:
   void WRegister(unsigned char addr, unsigned char data) const;
