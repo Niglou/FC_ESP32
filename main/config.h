@@ -20,7 +20,7 @@
     Analog  : PWM / ONESHOT125 / ONESHOT45 / MULTISHOT
     Digital : DSHOT150 / DSHOT300 / DSHOT600 / DSHOT1200
 */
-#define ESC_MODE        DSHOT600
+#define ESC_MODE        DSHOT300
 
 /* GPIO OUTPUT MOTOR */
 #define MOTOR_1_GPIO    9
