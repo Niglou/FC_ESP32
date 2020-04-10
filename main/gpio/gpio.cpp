@@ -2,6 +2,7 @@
 
 #include <registers/struct/gpio_struct.h>
 #include <registers/gpio_sig_map.h>
+#include <registers/struct/rtc_io_struct.h>
 
 #include "gpio.h"
 #include "main/rx/pwm.h"
@@ -41,6 +42,15 @@ void init_gpio() {
     GPIO.func_out_sel_cfg[MOTOR_2_GPIO].func_sel = RMT_SIG_OUT1_IDX;
     GPIO.func_out_sel_cfg[MOTOR_3_GPIO].func_sel = RMT_SIG_OUT2_IDX;
     GPIO.func_out_sel_cfg[MOTOR_4_GPIO].func_sel = RMT_SIG_OUT3_IDX;
+
+    // BATTERY GPIO
+    RTCIO.sensor_pads.sense1_mux_sel = 1;
+    RTCIO.sensor_pads.sense1_fun_sel = 0;
+    RTCIO.sensor_pads.sense1_fun_ie = 0;
+
+    RTCIO.enable_w1ts.w1ts = 0;
+    RTCIO.enable_w1tc.w1tc = 1;
+
 
 }
 
