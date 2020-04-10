@@ -112,13 +112,8 @@ void MAX7456::print(unsigned char x, unsigned char y, char *value, unsigned char
 
 void MAX7456::WRegister(unsigned char addr, unsigned char data) const {
   _spi->phase( SPI_ADDR | SPI_MOSI );
-<<<<<<< HEAD
-  _spi->addr_h(addr << 24);
-  _spi->buffer(0, data);
-=======
   _spi->addr_len(7);
   _spi->addr_h(addr << 24);
->>>>>>> osd
   _spi->mosi_len(7);
   _spi->buffer(0, data);
   _spi->transfer();
