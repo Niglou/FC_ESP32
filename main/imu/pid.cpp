@@ -42,37 +42,3 @@ float PID::calcul(float as_cmd, float as_mesure) {
 
   return PIDc;
 }
-
-/*
-float PID_calcul(Kpid constant, float va_cmd, float va_mesure, float *last_error, float *sum_i) {
-
-  float error = 0,
-        P = 0,
-        I = 0,
-        D = 0;
-
-  error = va_cmd - va_mesure;
-
-  P = constant.P * error;
-
-  if(error < LIMIT_I) {
-    *sum_i += error;
-    I = constant.I * *sum_i; }
-
-  D = constant.D * (error - *last_error);
-
-  *last_error = error;
-
-  if(P > LIMIT_PID) P = LIMIT_PID;
-  else if(P < -LIMIT_PID) P = -LIMIT_PID;
-
-  if(I > LIMIT_PID) I = LIMIT_PID;
-  else if(I < -LIMIT_PID) I = -LIMIT_PID;
-
-  if(D > LIMIT_PID) D = LIMIT_PID;
-  else if(D < -LIMIT_PID) D = -LIMIT_PID;
-
-  return P + I + D;
-
-}
-*/
