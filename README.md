@@ -3,7 +3,7 @@
 ## **Features**
 
 - **ESP32-PICO-D4 (DUAL CORE) 80Mhz**
-- **LOOP TIME** : 2Khz
+- **LOOP TIME** : 4Khz
 - **MODE** : Gyro / Stable    
 - **INPUT** : PWM
 - **IMU** : MPU9250 + BMP280 ( not implemented )
