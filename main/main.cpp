@@ -145,10 +145,10 @@ void main_cpu0() {
 
   osd.attach(&VSPI);
 
-  /* Set PID value */
-  pid_pitch.K ( 2.2f  , 0.006f  , 0.0f );
-  pid_roll.K  ( 2.2f  , 0.006f  , 0.0f );
-  pid_yaw.K   ( 4.0f  , 0.016f  , 0.0f );
+  // Set PID value
+  pid_pitch.K ( 1.3f  , 0.0035f  , 5.0f );
+  pid_roll.K  ( 1.3f  , 0.0035f  , 5.0f );
+  pid_yaw.K   ( 1.4f  , 0.0050f  , 0.0f );
 
   pid_acc_p.K ( 0.4f  , 0.0f  , 0.0f );
   pid_acc_r.K ( 0.4f  , 0.0f  , 0.0f );
@@ -200,7 +200,7 @@ void main_cpu0() {
     offset_gyro[0] += gyro->gyroX;
     offset_gyro[1] += gyro->gyroY;
     offset_gyro[2] += gyro->gyroZ;
-    while( Timer.counter_l() < 500 );
+    while( Timer.counter_l() < 250 );
     Timer.counter_l(0);
   }
   for(int i=0; i<3; i++)
@@ -239,8 +239,8 @@ void main_cpu0() {
   kalman_app.init();
 
   // Set kalman dt (loop time unit=sec)
-  kalman_pro.set_dt(0.0005f);
-  kalman_app.set_dt(0.0005f);
+  kalman_pro.set_dt(0.00025f);
+  kalman_app.set_dt(0.00025f);
 
   // Initialize MAX7456
   osd.init();
@@ -248,8 +248,8 @@ void main_cpu0() {
   // Config imu object to get all sensors values
   imu.config_get_all();
 
-  float RC = 1 / ( 2 * M_PI * 100.0f);
-  float K_GYRO = 0.0005f / (RC + 0.0005f);
+  float RC = 1 / ( 2 * M_PI * 75.0f);
+  float K_GYRO = 0.00025f / (RC + 0.00025f);
 
   // Start APP_CPU
   *(unsigned int*)(DPORT_APPCPU_CTRL_D_REG) = (unsigned int)&main_cpu1; // Address function
@@ -269,7 +269,7 @@ void main_cpu0() {
     // 500 (2KHz)
     // Use Low address counter (32bit)
     // No need High address (64bit)
-    while( Timer.counter_l() < 500 );
+    while( Timer.counter_l() < 250 );
     Timer.counter_l(0);
 
     // Get sensors values from SPI buffer
@@ -318,6 +318,7 @@ void main_cpu0() {
     prev_gyro[2][0] = gyro_z;
 */
 
+    // PT1 Filter
     prev_gyro[0][0] = prev_gyro[0][0] + K_GYRO * (gyro_x - prev_gyro[0][0]);
     prev_gyro[1][0] = prev_gyro[1][0] + K_GYRO * (gyro_y - prev_gyro[1][0]);
     prev_gyro[2][0] = prev_gyro[2][0] + K_GYRO * (gyro_z - prev_gyro[2][0]);
@@ -329,7 +330,6 @@ void main_cpu0() {
 
     // float temp = (sensors.temp / 321.0 + 21) * 10;
 
-    //ets_printf("D,%d,%d,%d,\n", (int)gyro_x, (int)gyro_y, (int)gyro_z);
 
     // Start kalman calcul on APP_CPU
     app_cpu_status = 1;
@@ -341,7 +341,7 @@ void main_cpu0() {
     // Convert voltage to XX.XX array for MAX7456
     int real_voltage_int = real_voltage;
     char array_real_voltage[5];
-    for(int i=5; i>=0; i--) {
+    for(int i=4; i>=0; i--) {
       array_real_voltage[i] = real_voltage_int % 10;
       real_voltage_int /= 10;
     }
@@ -364,32 +364,31 @@ void main_cpu0() {
     float aux_2       = rx_channel_[5];
 
     // Input Margin
-    if(pitch_ch > 1510)     pitch_ch  -= 1510;
-    else if(pitch_ch < 1490)pitch_ch  -= 1490;
-    else pitch_ch = 0;
+    if(pitch_ch > 1510.0f)     pitch_ch  -= 1510.0f;
+    else if(pitch_ch < 1490.0f)pitch_ch  -= 1490.0f;
+    else pitch_ch = 0.0f;
 
-    if(roll_ch > 1510)      roll_ch   -= 1510;
-    else if(roll_ch < 1490) roll_ch   -= 1490;
-    else roll_ch = 0;
+    if(roll_ch > 1510.0f)      roll_ch   -= 1510.0f;
+    else if(roll_ch < 1490.0f) roll_ch   -= 1490.0f;
+    else roll_ch = 0.0f;
 
-    if(yaw_ch > 1510)       yaw_ch    -= 1510;
-    else if(yaw_ch < 1490)  yaw_ch    -= 1490;
-    else yaw_ch = 0;
+    if(yaw_ch > 1510.0f)       yaw_ch    -= 1510.0f;
+    else if(yaw_ch < 1490.0f)  yaw_ch    -= 1490.0f;
+    else yaw_ch = 0.0f;
 
     // Input max value
-    if(pitch_ch < -500) pitch_ch  = -500;
-    if(roll_ch  < -500) roll_ch   = -500;
-    if(yaw_ch   < -500) yaw_ch    = -500;
+    if(pitch_ch < -500.0f) pitch_ch  = -500.0f;
+    if(roll_ch  < -500.0f) roll_ch   = -500.0f;
+    if(yaw_ch   < -500.0f) yaw_ch    = -500.0f;
 
-    if(pitch_ch > 500) pitch_ch = 500;
-    if(roll_ch  > 500) roll_ch  = 500;
-    if(yaw_ch   > 500) yaw_ch   = 500;
+    if(pitch_ch > 500.0f) pitch_ch = 500.0f;
+    if(roll_ch  > 500.0f) roll_ch  = 500.0f;
+    if(yaw_ch   > 500.0f) yaw_ch   = 500.0f;
 
     pitch_ch  = apply_rc_expo(pitch_ch);
     roll_ch   = apply_rc_expo(roll_ch);
     yaw_ch    = apply_rc_expo(yaw_ch);
 
-    //ets_printf("ch : %d, %d, %d\n", (int)pitch_ch, (int)roll_ch, (int)yaw_ch);
 
     // Kalman calcul on PRO_CPU
     kalman_pro.update(&rate_est_x, &angle_est_x, gyro_x, acc_y);
@@ -404,7 +403,7 @@ void main_cpu0() {
     // Calcul PID
     float Pitch, Roll, Yaw;
     // If switch STABLE MODE (AUX 2)
-    if( aux_2 > 1500 ) {
+    if( aux_2 > 1500.0f ) {
       pitch_ch = pid_acc_p.calcul(pitch_ch, angle_est_y);
       roll_ch  = pid_acc_r.calcul(roll_ch, angle_est_x);
     }
@@ -413,14 +412,14 @@ void main_cpu0() {
     Yaw = pid_yaw.calcul(yaw_ch, gyro_z);
 
     // Throttle 0 - 1000
-    throttle_ch -= 1000;
+    throttle_ch -= 1000.0f;
 
     // If Throttle 0 - 1000, convert to 0 - 2000 for dshot
-    if(ESC_MODE >= DSHOT150) throttle_ch *= 2;
+    if(ESC_MODE >= DSHOT150) throttle_ch *= 2.0f;
 
     // Limit value of throttle
-    if(throttle_ch < 0) throttle_ch = 0;
-    if(throttle_ch > 1500) throttle_ch = 1500;
+    if(throttle_ch < 0.0f) throttle_ch = 0.0f;
+    if(throttle_ch > 1500.0f) throttle_ch = 1500.0f;
 
     // Mix motor
     output_motor_[0] = throttle_ch - Pitch - Roll + Yaw;
@@ -429,7 +428,7 @@ void main_cpu0() {
 		output_motor_[3] = throttle_ch + Pitch - Roll - Yaw;
 
     // If ARM (AUX 1)
-    if(aux_1 > 1500) {
+    if(aux_1 > 1500.0f) {
 
       for(int i=0; i<4; i++) {
         if(output_motor_[i] > 1500) output_motor_[i] = 1500;
@@ -458,9 +457,6 @@ void main_cpu0() {
 
     }
 
-    //char text[] = {1, 2, 3};
-    //osd.print(13, 6, text, 3);
-
     // Send motor buffer to ESC
     for(int i=0; i<4; i++)
       motor_[i].write();
@@ -469,9 +465,6 @@ void main_cpu0() {
     //int looptime = Timer.counter_l();
     //ets_printf("t:%d us \n", looptime);
 
-    //float real_voltage = battery_voltage * battery_pont - 3200;
-    //ets_printf("ADC: %d mV\n", battery_voltage);
-    //ets_printf("V: %d mV\n", (int)real_voltage);
 
   }
 
