@@ -84,7 +84,7 @@ int MPU9250::check() const {
 
 void MPU9250::mpu_init() const {
 
-  WRegister( CONFIG , GYRO_BW_250 );
+  WRegister( CONFIG , GYRO_BW_3600 );
   WRegister( GYRO_CONFIG , GYRO_2000DPS | GYRO_8K_1KHZ );
   WRegister( ACCEL_CONFIG , ACCEL_8G );
   WRegister( ACCEL_CONFIG_2 , ACCEL_4KHZ );
