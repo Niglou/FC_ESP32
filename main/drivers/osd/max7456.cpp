@@ -33,22 +33,17 @@ void MAX7456::turnOff() const {
   WRegister(VM0,  0x01);
 }
 
+void MAX7456::reset() const
+{
+  WRegister(VM0,  0x02);
+}
+
 void MAX7456::init() const
 {
   WRegister(VM0,  0x6C);
   WRegister(OSDM, 0x00); // Insertion Mux
   WRegister(VOS,  0b11111); // Vertical Offset
-
-  unsigned int addr = 30*4+13;
-  char addrH = addr >> 8;
-  char addrL = addr;
-
-  WRegister(DMM, 0x0);
-  WRegister(DMAH, addrH);
-  WRegister(DMAL, addrL);
-
-  WRegister(DMDI, 1);
-
+  
 }
 
 int MAX7456::check() const {

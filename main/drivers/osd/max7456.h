@@ -47,6 +47,7 @@ public:
   void attach(SPIPeriph *spi);
   void spi_init() const;
   void turnOff() const;
+  void reset() const;
   void init() const;
   int check() const;
   char stat() const;
